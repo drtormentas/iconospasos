@@ -2,7 +2,7 @@
 import os, io, requests, math
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator, FuncFormatter
+from matplotlib.ticker import MaxNLocator, FuncFormatter
 from PIL import Image
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import streamlit as st
@@ -54,17 +54,6 @@ def draw_png(ax, x, y, pil_img):
     ab = AnnotationBbox(oi, (x, y), frameon=False, box_alignment=(0.5, 0.5))
     ax.add_artist(ab)
 
-# ---- helpers for “nice” axis
-def nice_ceiling(x: int) -> int:
-    if x <= 0:
-        return 10
-    exp = math.floor(math.log10(x))
-    base = 10 ** exp
-    for m in (1, 2, 5, 10):
-        if x <= m * base:
-            return m * base
-    return 10 * base
-
 def thousands(x, pos):
     return f"{int(x):,}"
 
@@ -73,14 +62,14 @@ def render_chart(df: pd.DataFrame):
         st.info("No hay datos para mostrar.")
         return
 
-    # winner * 1.5, then round up to a “nice” 1–2–5×10ⁿ
+    # --- Axis max: exactly 1.5× the current winner (no rounding to 10k etc.)
     winner = int(df["Pasos"].max())
-    raw_max = max(winner * 1.5, 10)
-    MAX_STEPS = nice_ceiling(raw_max)
+    MAX_STEPS = max(int(math.ceil(winner * 1.5)), 10)
 
     fig, ax = plt.subplots(figsize=(11, 3))
     ax.axhline(0, linewidth=1)
 
+    # stack icons if same x
     STACK_STEP = 0.35
     groups = {}
     for _, row in df.iterrows():
@@ -101,11 +90,9 @@ def render_chart(df: pd.DataFrame):
                 if is_url(icon) or looks_img_path(icon):
                     img = fetch_image(icon, px=48)
                     if img is not None:
-                        draw_png(ax, steps, y, img)
-                        placed = True
+                        draw_png(ax, steps, y, img); placed = True
                 else:
-                    ax.text(steps, y, icon, ha="center", va="center", fontsize=22)
-                    placed = True
+                    ax.text(steps, y, icon, ha="center", va="center", fontsize=22); placed = True
 
             if not placed:
                 ax.plot(steps, y, "o", markersize=8)
@@ -114,10 +101,9 @@ def render_chart(df: pd.DataFrame):
                     fontsize=9, fontweight="bold")
             ax.plot([steps, steps], [0.02, y - 0.02], linewidth=0.8, alpha=0.6)
 
-    # nice ticks: 10 divisions across the rounded MAX_STEPS
-    tick_step = max(1, MAX_STEPS // 10)
+    # --- Ticks: up to ~10 nice ticks; keeps your exact MAX_STEPS
     ax.set_xlim(0, MAX_STEPS)
-    ax.xaxis.set_major_locator(MultipleLocator(tick_step))
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=10, integer=True, steps=[1, 2, 5, 10]))
     ax.xaxis.set_major_formatter(FuncFormatter(thousands))
 
     ax.set_ylim(-0.6, 1.6)
