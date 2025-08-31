@@ -7,8 +7,8 @@ from PIL import Image
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import streamlit as st
 
-st.set_page_config(page_title="El reto de los pasos", layout="wide")
-st.title("El reto de los pasos")
+st.set_page_config(page_title="El reto de las tesis", layout="wide")
+st.title("El reto de las tesis")
 
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT2_0hqikR5l91BeYz_3ndukNZjRWq1cC5Cbh2RhkrEdqSaAlhYrxsE9bADLnIzVLyuEkWzQfllh12H/pub?gid=0&single=true&output=csv"
 
@@ -18,9 +18,9 @@ URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT2_0hqikR5l91BeYz_3ndukN
 def load_data(url: str) -> pd.DataFrame:
     df = pd.read_csv(url).dropna(how="all")
 
-    # Normaliza primeras 3 columnas a: Nombre, Pasos, Icon
+    # Normaliza primeras 3 columnas a: Nombre, Paginas, Icon
     cols = list(df.columns)
-    rename = {cols[0]: "Nombre", cols[1]: "Pasos"}
+    rename = {cols[0]: "Nombre", cols[1]: "Paginas"}
     if len(cols) >= 3:
         rename[cols[2]] = "Icon"
     df = df.rename(columns=rename)
@@ -30,14 +30,14 @@ def load_data(url: str) -> pd.DataFrame:
     df["Nombre"] = df["Nombre"].astype(str).str.strip()
     df = df[df["Nombre"] != ""]
 
-    # Pasos → int
-    df["Pasos"] = (
-        df["Pasos"].astype(str).str.replace(",", "", regex=False)
+    # Paginas → int
+    df["Paginas"] = (
+        df["Paginas"].astype(str).str.replace(",", "", regex=False)
         .pipe(pd.to_numeric, errors="coerce")
     )
-    df = df.dropna(subset=["Pasos"]).astype({"Pasos": int})
+    df = df.dropna(subset=["Paginas"]).astype({"Paginas": int})
 
-    keep = ["Nombre", "Pasos"] + (["Icon"] if "Icon" in df.columns else [])
+    keep = ["Nombre", "Paginas"] + (["Icon"] if "Icon" in df.columns else [])
     return df[keep]
 
 def is_url(s: str) -> bool:
@@ -96,7 +96,7 @@ def render_chart(df: pd.DataFrame):
         return
 
     # Eje máximo = 1.5× el líder (exacto)
-    winner = int(df["Pasos"].max())
+    winner = int(df["Paginas"].max())
     MAX_STEPS = max(int(math.ceil(winner * 1.5)), 10)
 
     fig, ax = plt.subplots(figsize=(11, 3))
@@ -107,7 +107,7 @@ def render_chart(df: pd.DataFrame):
     by_x = {}
     entries = []
     for _, row in df.iterrows():
-        steps = int(row["Pasos"])
+        steps = int(row["Paginas"])
         name = str(row["Nombre"])
         icon = str(row.get("Icon", "")).strip() if "Icon" in row and pd.notna(row.get("Icon")) else ""
         level = by_x.get(steps, 0)
@@ -170,10 +170,10 @@ if __name__ == "__main__":
     try:
         df = load_data(URL)
 
-        # En la tabla solo mostramos Nombre + Pasos (sin índice)
+        # En la tabla solo mostramos Nombre + Paginas (sin índice)
         with st.expander("Ver datos"):
             st.dataframe(
-                df[["Nombre", "Pasos"]].reset_index(drop=True).style.hide(axis="index"),
+                df[["Nombre", "Paginas"]].reset_index(drop=True).style.hide(axis="index"),
                 use_container_width=True
             )
 
