@@ -160,7 +160,7 @@ def render_chart(df: pd.DataFrame):
     ax.set_ylim(-0.6, 2.0)
     ax.set_yticks([])
     ax.grid(axis="x", alpha=0.25)
-    ax.set_title("Cantidad escrita", fontsize=14, pad=10)
+    ax.set_title("Páginas escritas", fontsize=14, pad=10)
 
     st.pyplot(fig, clear_figure=True)
 
