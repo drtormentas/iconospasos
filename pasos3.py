@@ -27,7 +27,7 @@ def load_data(url: str) -> pd.DataFrame:
         .pipe(pd.to_numeric, errors="coerce")
     )
     df = df.dropna(subset=["Pasos"]).astype({"Pasos": int})
-    return df
+    return df[["Nombre", "Pasos"]]
 
 def is_url(s): return isinstance(s, str) and s.lower().startswith(("http://","https://"))
 def looks_img_path(s):
