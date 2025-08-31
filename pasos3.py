@@ -57,28 +57,22 @@ def to_raw_if_github(url: str) -> str:
 
 @st.cache_data(show_spinner=False)
 def fetch_image(icon_str, px=48):
-    try:
-        if not isinstance(icon_str, str) or not icon_str.strip():
-            return None
-        icon_str = to_raw_if_github(icon_str.strip())
+   # ---- main
+try:
+    df = load_data(URL)
 
-        if is_url(icon_str):
-            r = requests.get(
-                icon_str, timeout=10, allow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            r.raise_for_status()
-            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
-        else:
-            if not os.path.exists(icon_str):
-                return None
-            img = Image.open(icon_str).convert("RGBA")
+    with st.expander("Ver datos"):
+        st.dataframe(
+            df.reset_index(drop=True).style.hide(axis="index"),
+            use_container_width=True
+        )
 
-        return img.resize((px, px), Image.LANCZOS)
+    render_chart(df)
 
-    except Exception as e:
-        st.warning(f"No pude cargar imagen: {icon_str}\nDetalles: {e}")
-        return None
+except Exception as e:
+    st.error("Ocurrió un error al construir la página.")
+    st.exception(e)
+
 
 def draw_png(ax, x, y, pil_img):
     oi = OffsetImage(pil_img, zoom=1.0)
