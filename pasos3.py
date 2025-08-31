@@ -73,9 +73,9 @@ def render_chart(df: pd.DataFrame):
         st.info("No hay datos para mostrar.")
         return
 
-    # winner * 2, then round up to a “nice” 1–2–5×10ⁿ
+    # winner * 1.5, then round up to a “nice” 1–2–5×10ⁿ
     winner = int(df["Pasos"].max())
-    raw_max = max(winner * 2, 10)
+    raw_max = max(winner * 1.5, 10)
     MAX_STEPS = nice_ceiling(raw_max)
 
     fig, ax = plt.subplots(figsize=(11, 3))
