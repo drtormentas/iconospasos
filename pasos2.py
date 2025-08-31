@@ -104,7 +104,7 @@ def render_chart(df: pd.DataFrame):
     ax.set_ylim(-0.6, 1.6)
     ax.set_yticks([])
     ax.grid(axis="x", alpha=0.25)
-    ax.set_title(f"Cantidad caminada (escala hasta {MAX_STEPS:,})", fontsize=12, pad=10)
+    ax.set_title(f"Cantidad caminada", fontsize=12, pad=10)
 
     st.pyplot(fig, clear_figure=True)
 
