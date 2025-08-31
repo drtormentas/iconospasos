@@ -146,8 +146,12 @@ def render_chart(df: pd.DataFrame):
 # ---- main
 try:
     df = load_data(URL)
-with st.expander("Ver datos"):
-    st.dataframe(df.reset_index(drop=True), use_container_width=True)
+
+    with st.expander("Ver datos"):
+        st.dataframe(df.reset_index(drop=True), use_container_width=True)
+
+    render_chart(df)
+
 except Exception as e:
     st.error("Ocurrió un error al construir la página.")
     st.exception(e)
