@@ -12,41 +12,72 @@ st.title("El reto de los pasos")
 
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT2_0hqikR5l91BeYz_3ndukNZjRWq1cC5Cbh2RhkrEdqSaAlhYrxsE9bADLnIzVLyuEkWzQfllh12H/pub?gid=0&single=true&output=csv"
 
+# ----------------------- Data -----------------------
+
 @st.cache_data(ttl=60)
 def load_data(url: str) -> pd.DataFrame:
-    df = pd.read_csv(url)
-    df = df.dropna(how="all")
+    df = pd.read_csv(url).dropna(how="all")
+
+    # Normalize headers (first 3 columns = Nombre, Pasos, Icon)
     cols = list(df.columns)
     rename = {cols[0]: "Nombre", cols[1]: "Pasos"}
     if len(cols) >= 3:
         rename[cols[2]] = "Icon"
     df = df.rename(columns=rename)
+
+    # Clean up
+    df["Nombre"] = df["Nombre"].astype(str).str.strip()
     df = df.dropna(subset=["Nombre"])
+
     df["Pasos"] = (
         df["Pasos"].astype(str).str.replace(",", "", regex=False)
         .pipe(pd.to_numeric, errors="coerce")
     )
     df = df.dropna(subset=["Pasos"]).astype({"Pasos": int})
-    return df[["Nombre", "Pasos"]]
 
-def is_url(s): return isinstance(s, str) and s.lower().startswith(("http://","https://"))
+    # Keep only the columns we need for plotting (Icon included)
+    keep = ["Nombre", "Pasos"] + (["Icon"] if "Icon" in df.columns else [])
+    return df[keep]
+
+def is_url(s): 
+    return isinstance(s, str) and s.lower().startswith(("http://","https://"))
+
 def looks_img_path(s):
-    if not isinstance(s, str): return False
+    if not isinstance(s, str): 
+        return False
     s = s.lower()
     return s.endswith((".png",".jpg",".jpeg",".webp"))
 
+def to_raw_if_github(url: str) -> str:
+    # Convert github blob URLs to raw URLs automatically
+    # https://github.com/u/r/blob/sha/path -> https://raw.githubusercontent.com/u/r/sha/path
+    if isinstance(url, str) and "github.com" in url and "/blob/" in url:
+        return url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
+    return url
+
+@st.cache_data(show_spinner=False)
 def fetch_image(icon_str, px=48):
     try:
+        if not isinstance(icon_str, str) or not icon_str.strip():
+            return None
+        icon_str = to_raw_if_github(icon_str.strip())
+
         if is_url(icon_str):
-            r = requests.get(icon_str, timeout=10)
+            r = requests.get(
+                icon_str, timeout=10, allow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
             r.raise_for_status()
             img = Image.open(io.BytesIO(r.content)).convert("RGBA")
         else:
-            if not os.path.exists(icon_str): return None
+            if not os.path.exists(icon_str):
+                return None
             img = Image.open(icon_str).convert("RGBA")
+
         return img.resize((px, px), Image.LANCZOS)
+
     except Exception as e:
-        st.warning(f"No pude cargar imagen '{icon_str}': {e}")
+        st.warning(f"No pude cargar imagen: {icon_str}\nDetalles: {e}")
         return None
 
 def draw_png(ax, x, y, pil_img):
@@ -57,19 +88,21 @@ def draw_png(ax, x, y, pil_img):
 def thousands(x, pos):
     return f"{int(x):,}"
 
+# --------------------- Plotting ---------------------
+
 def render_chart(df: pd.DataFrame):
     if df.empty:
         st.info("No hay datos para mostrar.")
         return
 
-    # Axis max = exactly 1.5× winner (kept from your latest version)
+    # Axis max = exactly 1.5× winner (no rounding to 10k etc.)
     winner = int(df["Pasos"].max())
     MAX_STEPS = max(int(math.ceil(winner * 1.5)), 10)
 
     fig, ax = plt.subplots(figsize=(11, 3))
     ax.axhline(0, linewidth=1)
 
-    # ---- 1) Build entries with base y (stack if same x)
+    # 1) Build entries with base y (stack if same x)
     STACK_STEP = 0.35
     by_x = {}
     entries = []
@@ -83,32 +116,25 @@ def render_chart(df: pd.DataFrame):
         by_x[steps] = level + 1
         entries.append({"steps": steps, "name": name, "icon": icon, "base_y": base_y})
 
-    # ---- 2) Assign label levels to avoid collisions for *nearby* x
-    # Cluster consecutive points that are closer than a threshold on the x-axis
-    NEAR_PCT = 0.03                     # 3% of axis width counts as "near"
+    # 2) Stagger name labels for nearby x to avoid overlaps
+    NEAR_PCT = 0.03                     # "near" = within 3% of axis
     dx_thresh = MAX_STEPS * NEAR_PCT
-    LABEL_LEVELS = [0.35, 0.60, 0.85]   # name offsets above base_y
+    LABEL_LEVELS = [0.35, 0.60, 0.85]   # offsets above icon
 
-    # sort by steps
     entries.sort(key=lambda e: e["steps"])
-
-    # walk and assign a level within each proximity cluster
     cluster_start = 0
-    level_cycle = [i for i in range(len(LABEL_LEVELS))]
     for i in range(len(entries)):
         if i == cluster_start:
             entries[i]["label_level"] = 0
             continue
-        # if too far from previous point, start new cluster
         if entries[i]["steps"] - entries[i-1]["steps"] > dx_thresh:
             cluster_start = i
             entries[i]["label_level"] = 0
         else:
-            # same cluster → rotate levels 0,1,2,0,1,2,...
             prev_level = entries[i-1].get("label_level", 0)
             entries[i]["label_level"] = (prev_level + 1) % len(LABEL_LEVELS)
 
-    # ---- 3) Plot icons/markers + names using the staggered label levels
+    # 3) Draw icons/markers + names
     for e in entries:
         steps, name, icon, base_y = e["steps"], e["name"], e["icon"], e["base_y"]
 
@@ -117,11 +143,9 @@ def render_chart(df: pd.DataFrame):
             if is_url(icon) or looks_img_path(icon):
                 img = fetch_image(icon, px=48)
                 if img is not None:
-                    draw_png(ax, steps, base_y, img)
-                    placed = True
+                    draw_png(ax, steps, base_y, img); placed = True
             else:
-                ax.text(steps, base_y, icon, ha="center", va="center", fontsize=22)
-                placed = True
+                ax.text(steps, base_y, icon, ha="center", va="center", fontsize=22); placed = True
 
         if not placed:
             ax.plot(steps, base_y, "o", markersize=8)
@@ -130,27 +154,30 @@ def render_chart(df: pd.DataFrame):
         ax.text(steps, name_y, name, ha="center", va="bottom", fontsize=9, fontweight="bold")
         ax.plot([steps, steps], [0.02, base_y - 0.02], linewidth=0.8, alpha=0.6)
 
-    # ---- 4) Ticks & chrome
-    from matplotlib.ticker import MaxNLocator
+    # 4) Ticks & chrome (keeps your exact MAX_STEPS)
     ax.set_xlim(0, MAX_STEPS)
     ax.xaxis.set_major_locator(MaxNLocator(nbins=10, integer=True, steps=[1, 2, 5, 10]))
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: f"{int(x):,}"))
-    ax.set_ylim(-0.6, 2.0)  # a bit taller to accommodate staggered labels
+    ax.xaxis.set_major_formatter(FuncFormatter(thousands))
+    ax.set_ylim(-0.6, 2.0)   # taller to fit staggered labels
     ax.set_yticks([])
     ax.grid(axis="x", alpha=0.25)
     ax.set_title("Cantidad caminada", fontsize=14, pad=10)
 
     st.pyplot(fig, clear_figure=True)
 
+# ---------------------- Main -----------------------
 
-# ---- main
 try:
     df = load_data(URL)
 
-    with st.expander("Ver datos"):
-        st.dataframe(df.reset_index(drop=True), use_container_width=True)
+    # Show only Nombre + Pasos in the table (hide Icon)
+    cols_to_show = ["Nombre", "Pasos"]
+    st.expander("Ver datos").dataframe(
+        df[cols_to_show].reset_index(drop=True),
+        use_container_width=True
+    )
 
-    render_chart(df)
+    render_chart(df)   # pass full df (with Icon) so icons appear
 
 except Exception as e:
     st.error("Ocurrió un error al construir la página.")
