@@ -172,8 +172,9 @@ try:
 
     # Show only Nombre + Pasos in the table (hide Icon)
     cols_to_show = ["Nombre", "Pasos"]
-    st.expander("Ver datos").dataframe(
-        df[cols_to_show].reset_index(drop=True),
+with st.expander("Ver datos"):
+    st.dataframe(
+        df.reset_index(drop=True).style.hide(axis="index"),  # oculta índice
         use_container_width=True
     )
 
